@@ -9,8 +9,15 @@ public class player : MonoBehaviour
         float x = Input.GetAxis("Horizontal");
         float z = Input.GetAxis("Vertical");
 
-        Vector3 move = new Vector3(x, 0f, z);
+        Vector3 move = new Vector3(-x, 0f, -z);
 
         transform.Translate(move * moveSpeed * Time.deltaTime, Space.World);
+    }
+    private void OnTriggerEnter(Collider other)
+    {
+        if (other.CompareTag("Car"))
+        {
+            Debug.Log("게임 오버");
+        }
     }
 }
