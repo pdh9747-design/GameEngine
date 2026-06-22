@@ -8,67 +8,79 @@ public class player : MonoBehaviour
     public TextMeshProUGUI lifeText;
     public TextMeshProUGUI timerText;
 
-    private int life = 3;
-    private float timeLeft = 60f;
+    private CharacterController controller;
 
-    private Vector3 startPos;
+    private int life = 3;
+    private float timer = 60f;
+
+    private bool isInvincible = false;
+
+    public Vector3 respawnPosition;
 
     void Start()
     {
-        Time.timeScale = 1f;
+        controller = GetComponent<CharacterController>();
 
-        startPos = transform.position;
+        respawnPosition = transform.position;
 
         lifeText.text = "목숨 : " + life;
-        timerText.text = "시간 : 60초";
+        timerText.text = "시간 : " + Mathf.Ceil(timer) + "초";
     }
 
     void Update()
     {
-        // 플레이어 이동
+        // 이동
         float x = Input.GetAxis("Horizontal");
         float z = Input.GetAxis("Vertical");
 
         Vector3 move = new Vector3(-x, 0f, -z);
 
-        transform.Translate(move * moveSpeed * Time.deltaTime, Space.World);
+        controller.Move(move * moveSpeed * Time.deltaTime);
 
         // 타이머
-        timeLeft -= Time.deltaTime;
+        timer -= Time.deltaTime;
 
-        if (timeLeft < 0)
-            timeLeft = 0;
+        if (timer < 0)
+            timer = 0;
 
-        timerText.text = "시간 : " + Mathf.Ceil(timeLeft) + "초";
+        timerText.text = "시간 : " + Mathf.Ceil(timer) + "초";
 
-        // 시간 종료
-        if (timeLeft <= 0)
+        // 클리어
+        if (timer <= 0)
         {
-            timerText.text = "클리어!";
+            Debug.Log("게임 클리어");
             Time.timeScale = 0f;
         }
     }
 
     private void OnTriggerEnter(Collider other)
     {
-        if (other.CompareTag("Car"))
+        if (other.CompareTag("Car") && !isInvincible)
         {
             life--;
 
-            if (life <= 0)
-            {
-                life = 0;
-                lifeText.text = "게임 오버";
-
-                Debug.Log("게임 오버");
-
-                Time.timeScale = 0f;
-                return;
-            }
-
             lifeText.text = "목숨 : " + life;
 
-          
+            Debug.Log("차량 충돌");
+
+            // 시작 위치로 이동
+            transform.position = respawnPosition;
+
+            isInvincible = true;
+
+            // 3초 무적
+            Invoke(nameof(ResetDamage), 3f);
+
+            if (life <= 0)
+            {
+                Debug.Log("게임 오버");
+                Time.timeScale = 0f;
+            }
         }
+    }
+
+    void ResetDamage()
+    {
+        isInvincible = false;
     }
 }
