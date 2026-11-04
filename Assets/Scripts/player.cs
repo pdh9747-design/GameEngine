@@ -1,5 +1,6 @@
 using UnityEngine;
 using TMPro;
+using UnityEngine.InputSystem;
 
 public class player : MonoBehaviour
 {
@@ -10,6 +11,7 @@ public class player : MonoBehaviour
     [Header("UI")]
     public TextMeshProUGUI lifeText;
     public TextMeshProUGUI timerText;
+    public GameObject startPanel;
     public GameObject gameOverPanel;
     public GameObject gameClearPanel;
 
@@ -22,6 +24,7 @@ public class player : MonoBehaviour
     private int life = 3;
     private float timer = 60f;
 
+    private bool isStarted = false;
     private bool isInvincible = false;
     private bool isGameOver = false;
     private bool isClear = false;
@@ -33,14 +36,18 @@ public class player : MonoBehaviour
         // 플레이어 시작 위치 저장
         respawnPosition = transform.position;
 
-        // 게임 시간 정상화
-        Time.timeScale = 1f;
+        // 게임 시작 전 시간 정지
+        Time.timeScale = 0f;
 
-        // 게임오버 패널 숨기기
+        // 시작 화면 표시
+        if (startPanel != null)
+            startPanel.SetActive(true);
+
+        // 게임오버 화면 숨기기
         if (gameOverPanel != null)
             gameOverPanel.SetActive(false);
 
-        // 게임클리어 패널 숨기기
+        // 게임클리어 화면 숨기기
         if (gameClearPanel != null)
             gameClearPanel.SetActive(false);
 
@@ -49,14 +56,30 @@ public class player : MonoBehaviour
 
     void Update()
     {
-        // 게임오버 또는 클리어 상태면 움직이지 않음
-        if (isGameOver || isClear)
+        // 시작 전, 게임오버, 클리어 상태에서는 진행하지 않음
+        if (!isStarted || isGameOver || isClear)
             return;
 
-        // 플레이어 이동
-        float x = Input.GetAxis("Horizontal");
-        float z = Input.GetAxis("Vertical");
+        // 새 Input System 키보드 입력
+        float x = 0f;
+        float z = 0f;
 
+        if (Keyboard.current != null)
+        {
+            if (Keyboard.current.aKey.isPressed)
+                x = -1f;
+
+            if (Keyboard.current.dKey.isPressed)
+                x = 1f;
+
+            if (Keyboard.current.wKey.isPressed)
+                z = 1f;
+
+            if (Keyboard.current.sKey.isPressed)
+                z = -1f;
+        }
+
+        // 기존 이동 방향 유지
         Vector3 move = new Vector3(-x, 0f, -z);
 
         controller.Move(move * moveSpeed * Time.deltaTime);
@@ -76,8 +99,7 @@ public class player : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
-        // 게임오버 또는 클리어 상태면 충돌 처리 안 함
-        if (isGameOver || isClear)
+        if (!isStarted || isGameOver || isClear)
             return;
 
         // 차량에 충돌했고 무적 상태가 아닐 때
@@ -90,7 +112,7 @@ public class player : MonoBehaviour
 
             Debug.Log("차량 충돌");
 
-            // 충돌해도 플레이어 위치는 이동하지 않음
+            // 충돌해도 플레이어 위치는 유지
             isInvincible = true;
 
             // 기존 무적 해제 예약 취소
@@ -111,11 +133,9 @@ public class player : MonoBehaviour
 
         Debug.Log("게임 오버");
 
-        // 게임오버 패널 표시
         if (gameOverPanel != null)
             gameOverPanel.SetActive(true);
 
-        // 게임 정지
         Time.timeScale = 0f;
     }
 
@@ -125,11 +145,9 @@ public class player : MonoBehaviour
 
         Debug.Log("게임 클리어");
 
-        // 게임클리어 패널 표시
         if (gameClearPanel != null)
             gameClearPanel.SetActive(true);
 
-        // 게임 정지
         Time.timeScale = 0f;
     }
 
@@ -144,18 +162,30 @@ public class player : MonoBehaviour
         timerText.text = "시간 : " + Mathf.Ceil(timer) + "초";
     }
 
-    public void RestartGame()
+    // START 버튼
+    public void StartGame()
     {
-        // 게임 시간 정상화
+        isStarted = true;
+
+        if (startPanel != null)
+            startPanel.SetActive(false);
+
         Time.timeScale = 1f;
 
-        // 무적 예약 취소
+        Debug.Log("게임 시작");
+    }
+
+    // RESTART 버튼
+    public void RestartGame()
+    {
+        Time.timeScale = 1f;
+
         CancelInvoke(nameof(ResetDamage));
 
-        // 상태 초기화
         life = 3;
         timer = 60f;
 
+        isStarted = true;
         isInvincible = false;
         isGameOver = false;
         isClear = false;
@@ -178,20 +208,21 @@ public class player : MonoBehaviour
                 car.ResetCarPosition();
         }
 
-        // UI 갱신
         UpdateUI();
 
-        // 게임오버 패널 숨기기
+        if (startPanel != null)
+            startPanel.SetActive(false);
+
         if (gameOverPanel != null)
             gameOverPanel.SetActive(false);
 
-        // 게임클리어 패널 숨기기
         if (gameClearPanel != null)
             gameClearPanel.SetActive(false);
 
         Debug.Log("게임 다시 시작");
     }
 
+    // QUIT 버튼
     public void QuitGame()
     {
         Debug.Log("게임 종료");
