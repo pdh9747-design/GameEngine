@@ -6,6 +6,9 @@ public class CarMoveRight : MonoBehaviour
     public float resetX = 50f;
     public float endX = -50f;
 
+    // 모든 자동차가 공유하는 속도 배율
+    public static float speedMultiplier = 1f;
+
     private Vector3 startPosition;
 
     void Start()
@@ -16,7 +19,10 @@ public class CarMoveRight : MonoBehaviour
 
     void Update()
     {
-        transform.Translate(Vector3.forward * speed * Time.deltaTime, Space.Self);
+        transform.Translate(
+            Vector3.forward * speed * speedMultiplier * Time.deltaTime,
+            Space.Self
+        );
 
         if (transform.position.x < endX)
         {

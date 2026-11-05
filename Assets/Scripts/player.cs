@@ -11,6 +11,8 @@ public class player : MonoBehaviour
     [Header("UI")]
     public TextMeshProUGUI lifeText;
     public TextMeshProUGUI timerText;
+    public TextMeshProUGUI speedUpText;
+
     public GameObject startPanel;
     public GameObject gameOverPanel;
     public GameObject gameClearPanel;
@@ -19,214 +21,350 @@ public class player : MonoBehaviour
     public CarMoveLeft[] leftCars;
     public CarMoveRight[] rightCars;
 
+    [Header("Hit Effect")]
+    public GameObject hitEffectPrefab;
+
+    [Header("Car Difficulty")]
+    public float speedIncreaseInterval = 15f;
+    public float speedIncreaseAmount = 0.2f;
+    public float maxSpeedMultiplier = 2f;
+
     private CharacterController controller;
+    private Renderer[] playerRenderers;
 
     private int life = 3;
     private float timer = 60f;
+    private float speedIncreaseTimer = 0f;
 
     private bool isStarted = false;
     private bool isInvincible = false;
     private bool isGameOver = false;
     private bool isClear = false;
 
+
     void Start()
     {
         controller = GetComponent<CharacterController>();
+        playerRenderers = GetComponentsInChildren<Renderer>();
 
-        // 플레이어 시작 위치 저장
         respawnPosition = transform.position;
 
-        // 게임 시작 전 시간 정지
+        // 자동차 속도 초기화
+        CarMoveLeft.speedMultiplier = 1f;
+        CarMoveRight.speedMultiplier = 1f;
+
         Time.timeScale = 0f;
 
-        // 시작 화면 표시
-        if (startPanel != null)
-            startPanel.SetActive(true);
+        startPanel.SetActive(true);
+        gameOverPanel.SetActive(false);
+        gameClearPanel.SetActive(false);
 
-        // 게임오버 화면 숨기기
-        if (gameOverPanel != null)
-            gameOverPanel.SetActive(false);
-
-        // 게임클리어 화면 숨기기
-        if (gameClearPanel != null)
-            gameClearPanel.SetActive(false);
+        // 속도 증가 문구 숨기기
+        if (speedUpText != null)
+        {
+            speedUpText.gameObject.SetActive(false);
+        }
 
         UpdateUI();
     }
 
+
     void Update()
     {
-        // 시작 전, 게임오버, 클리어 상태에서는 진행하지 않음
         if (!isStarted || isGameOver || isClear)
-            return;
-
-        // 새 Input System 키보드 입력
-        float x = 0f;
-        float z = 0f;
-
-        if (Keyboard.current != null)
         {
-            if (Keyboard.current.aKey.isPressed)
-                x = -1f;
-
-            if (Keyboard.current.dKey.isPressed)
-                x = 1f;
-
-            if (Keyboard.current.wKey.isPressed)
-                z = 1f;
-
-            if (Keyboard.current.sKey.isPressed)
-                z = -1f;
+            return;
         }
 
-        // 기존 이동 방향 유지
-        Vector3 move = new Vector3(-x, 0f, -z);
+        Keyboard keyboard = Keyboard.current;
 
-        controller.Move(move * moveSpeed * Time.deltaTime);
+        if (keyboard != null)
+        {
+            float x = 0f;
+            float z = 0f;
 
-        // 타이머 감소
+            if (keyboard.aKey.isPressed)
+            {
+                x = -1f;
+            }
+
+            if (keyboard.dKey.isPressed)
+            {
+                x = 1f;
+            }
+
+            if (keyboard.wKey.isPressed)
+            {
+                z = 1f;
+            }
+
+            if (keyboard.sKey.isPressed)
+            {
+                z = -1f;
+            }
+
+            Vector3 move = new Vector3(-x, 0f, -z);
+
+            controller.Move(move * moveSpeed * Time.deltaTime);
+        }
+
+        // 자동차 속도 증가 타이머
+        speedIncreaseTimer += Time.deltaTime;
+
+        if (speedIncreaseTimer >= speedIncreaseInterval)
+        {
+            speedIncreaseTimer = 0f;
+
+            // 실제로 속도가 증가하는 경우에만 문구 표시
+            bool canIncreaseSpeed =
+                CarMoveLeft.speedMultiplier < maxSpeedMultiplier ||
+                CarMoveRight.speedMultiplier < maxSpeedMultiplier;
+
+            CarMoveLeft.speedMultiplier = Mathf.Min(
+                CarMoveLeft.speedMultiplier + speedIncreaseAmount,
+                maxSpeedMultiplier
+            );
+
+            CarMoveRight.speedMultiplier = Mathf.Min(
+                CarMoveRight.speedMultiplier + speedIncreaseAmount,
+                maxSpeedMultiplier
+            );
+
+            if (canIncreaseSpeed)
+            {
+                ShowSpeedUpText();
+            }
+        }
+
+        // 게임 타이머
         timer -= Time.deltaTime;
 
-        if (timer < 0f)
-            timer = 0f;
-
-        timerText.text = "시간 : " + Mathf.Ceil(timer) + "초";
-
-        // 시간이 끝나면 게임 클리어
         if (timer <= 0f)
+        {
+            timer = 0f;
             GameClear();
+        }
+
+        UpdateUI();
     }
 
-    private void OnTriggerEnter(Collider other)
+
+    // 속도 증가 문구 표시
+    void ShowSpeedUpText()
+    {
+        if (speedUpText == null)
+        {
+            return;
+        }
+
+        speedUpText.gameObject.SetActive(true);
+
+        // 문구가 이미 표시 중이면 숨기는 시간 갱신
+        CancelInvoke(nameof(HideSpeedUpText));
+        Invoke(nameof(HideSpeedUpText), 2f);
+    }
+
+
+    // 속도 증가 문구 숨기기
+    void HideSpeedUpText()
+    {
+        if (speedUpText != null)
+        {
+            speedUpText.gameObject.SetActive(false);
+        }
+    }
+
+
+    void OnTriggerEnter(Collider other)
     {
         if (!isStarted || isGameOver || isClear)
+        {
             return;
+        }
 
-        // 차량에 충돌했고 무적 상태가 아닐 때
         if (other.CompareTag("Car") && !isInvincible)
         {
+            // 충돌 이펙트 생성
+            if (hitEffectPrefab != null)
+            {
+                GameObject effect = Instantiate(
+                    hitEffectPrefab,
+                    transform.position + Vector3.up,
+                    Quaternion.identity
+                );
+
+                // 파티클 재생이 끝나면 이펙트 오브젝트 삭제
+                ParticleSystem ps =
+                    effect.GetComponentInChildren<ParticleSystem>();
+
+                if (ps != null)
+                {
+                    var main = ps.main;
+
+                    Destroy(
+                        effect,
+                        main.duration + main.startLifetime.constantMax
+                    );
+                }
+                else
+                {
+                    Destroy(effect, 3f);
+                }
+            }
+
             // 목숨 감소
             life--;
 
-            lifeText.text = "목숨 : " + life;
+            UpdateUI();
 
-            Debug.Log("차량 충돌");
+            Debug.Log("목숨 감소! 남은 목숨: " + life);
 
-            // 충돌해도 플레이어 위치는 유지
+            // 무적 상태 시작
             isInvincible = true;
 
-            // 기존 무적 해제 예약 취소
             CancelInvoke(nameof(ResetDamage));
+            CancelInvoke(nameof(BlinkPlayer));
 
-            // 3초 후 무적 해제
+            InvokeRepeating(nameof(BlinkPlayer), 0f, 0.2f);
             Invoke(nameof(ResetDamage), 3f);
 
-            // 목숨이 0이면 게임오버
             if (life <= 0)
+            {
                 GameOver();
+            }
         }
     }
 
+
+    // 플레이어 깜빡임
+    void BlinkPlayer()
+    {
+        foreach (Renderer playerRenderer in playerRenderers)
+        {
+            playerRenderer.enabled = !playerRenderer.enabled;
+        }
+    }
+
+
+    // 무적 상태 종료
+    void ResetDamage()
+    {
+        isInvincible = false;
+
+        CancelInvoke(nameof(BlinkPlayer));
+
+        foreach (Renderer playerRenderer in playerRenderers)
+        {
+            playerRenderer.enabled = true;
+        }
+    }
+
+
+    // 게임 오버
     void GameOver()
     {
         isGameOver = true;
 
-        Debug.Log("게임 오버");
+        HideSpeedUpText();
 
-        if (gameOverPanel != null)
-            gameOverPanel.SetActive(true);
+        gameOverPanel.SetActive(true);
 
         Time.timeScale = 0f;
     }
 
+
+    // 게임 클리어
     void GameClear()
     {
         isClear = true;
 
-        Debug.Log("게임 클리어");
+        HideSpeedUpText();
 
-        if (gameClearPanel != null)
-            gameClearPanel.SetActive(true);
+        gameClearPanel.SetActive(true);
 
         Time.timeScale = 0f;
     }
 
-    void ResetDamage()
-    {
-        isInvincible = false;
-    }
 
+    // UI 업데이트
     void UpdateUI()
     {
-        lifeText.text = "목숨 : " + life;
-        timerText.text = "시간 : " + Mathf.Ceil(timer) + "초";
+        lifeText.text = "Life : " + life;
+        timerText.text = "Time : " + Mathf.CeilToInt(timer);
     }
 
-    // START 버튼
+
+    // 게임 시작
     public void StartGame()
     {
         isStarted = true;
 
-        if (startPanel != null)
-            startPanel.SetActive(false);
-
         Time.timeScale = 1f;
 
-        Debug.Log("게임 시작");
+        startPanel.SetActive(false);
     }
 
-    // RESTART 버튼
+
+    // 게임 재시작
     public void RestartGame()
     {
         Time.timeScale = 1f;
 
         CancelInvoke(nameof(ResetDamage));
-
-        life = 3;
-        timer = 60f;
+        CancelInvoke(nameof(BlinkPlayer));
+        CancelInvoke(nameof(HideSpeedUpText));
 
         isStarted = true;
         isInvincible = false;
         isGameOver = false;
         isClear = false;
 
-        // 플레이어 시작 위치로 이동
+        life = 3;
+        timer = 60f;
+
+        // 자동차 속도 초기화
+        speedIncreaseTimer = 0f;
+
+        CarMoveLeft.speedMultiplier = 1f;
+        CarMoveRight.speedMultiplier = 1f;
+
+        // 속도 증가 문구 숨기기
+        HideSpeedUpText();
+
+        // 플레이어 위치 초기화
         controller.enabled = false;
         transform.position = respawnPosition;
         controller.enabled = true;
 
-        // 차량 위치 초기화
+        // 플레이어 렌더러 다시 표시
+        foreach (Renderer playerRenderer in playerRenderers)
+        {
+            playerRenderer.enabled = true;
+        }
+
+        // 자동차 위치 초기화
         foreach (CarMoveLeft car in leftCars)
         {
-            if (car != null)
-                car.ResetCarPosition();
+            car.ResetCarPosition();
         }
 
         foreach (CarMoveRight car in rightCars)
         {
-            if (car != null)
-                car.ResetCarPosition();
+            car.ResetCarPosition();
         }
 
+        // UI 초기화
+        startPanel.SetActive(false);
+        gameOverPanel.SetActive(false);
+        gameClearPanel.SetActive(false);
+
         UpdateUI();
-
-        if (startPanel != null)
-            startPanel.SetActive(false);
-
-        if (gameOverPanel != null)
-            gameOverPanel.SetActive(false);
-
-        if (gameClearPanel != null)
-            gameClearPanel.SetActive(false);
-
-        Debug.Log("게임 다시 시작");
     }
 
-    // QUIT 버튼
+
+    // 게임 종료
     public void QuitGame()
     {
-        Debug.Log("게임 종료");
-
         Application.Quit();
     }
 }
